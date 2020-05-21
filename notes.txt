@@ -1,0 +1,439 @@
+SCHEME OF THE MODEL-VIEW-CONTROLLER (MVC)
+
+Takeaways
+MVC stands for Model-View-Controller, a common pattern for architecting web applications
+Describes the 3 layers of the application we are developing
+Layers
+Models manage data and business logic for us. What happens inside models and database, capturing logical relationships
+and properties across the web app objects
+Views handles display and representation logic. What the user sees (HTML, CSS, JS from the user's perspective)
+Controllers: routes commands to the models and views, containing control logic. Control how commands are sent to models
+    and views, and how models and views wound up interacting with each other.
+
+HANDLING USER INPUT
+
+Takeaways
+Creating, updating, and deleting information from a database requires handling user input on what is being
+created/updated/deleted. This will be the focus of the rest of this series.
+MVC Development: How we'd add Create To-Do item functionality
+On the view: implement an HTML form
+On the controller: retrieve the user's input, and manipulate models
+On the models: create a record in our database, and return the newly created
+to-do item to the controller
+On the controller: take the newly created to-do item, and decide how to update
+the view with it.
+    What we'll learn in order
+How we accept and get user data in the context of a Flask app
+Send data in controllers using database sessions in a controller
+Manipulating models adding records in SQLAlchemy Models
+Direct how the view should update within the controller and views
+
+GETTING USER DATA IN FLASK
+
+Takeaways
+There are 3 methods of getting user data from a view to a controller. See the
+image below.
+URL query parameters
+Forms
+JSON
+URL query parameters
+URL query parameters are listed as key-value pairs at the end of a URL,
+preceding a "?" question mark.
+E.g. www.example.com/hello?my_key=my_value.
+Form data
+request.form.get('<name>') reads the value from a form input control (text
+input, number input, password input, etc)
+by the name attribute on the input HTML element.
+Note: defaults
+request.args.get, request.form.get both accept an optional second parameter,
+e.g. request.args.get('foo', 'my default'),
+set to a default value, in case the result is empty.
+JSON
+request.data retrieves JSON as a string. Then we'd take that string and turn
+it into python constructs by calling
+json.loads ' \
+'on the request.data string to turn it into lists and dictionaries in Python.
+
+Takeaways
+# forms take an action (name of the route) and method (route method) to submit data to our server.
+# The name attribute on a form control element is the key used to retrieve data from request.get(<key>).
+# All forms either define a submit button, or allow the user to hit ENTER on an input to submit the form.
+
+Correct! We get form data from the keys named by the name attribute in an HTML form control element.
+
+Takeaways
+The way form data traverses from the client to server differs based on whether we are using a GET or a POST method on
+the form.
+The POST submission
+On submit, we send off an HTTP POST request to the route /create with a request body
+The request body stringifies the key-value pairs of fields from the form (as part of the name attribute) along with
+their values.
+The GET submission
+Sends off a GET request with URL query parameters that appends the form data to the URL.
+Ideal for smaller form submissions.
+POSTs are ideal for longer form submissions, since URL query parameters can only be so long compared to request bodies
+(max 2048 characters). Moreover, forms can only send POST and GET requests, and nothing else.
+
+MIGRATIONS
+
+Takeaways
+Migrations
+
+encapsulate a set of changes to our database schema, made over time.
+are uniquely named
+are usually stored as local files in our project repo, e.g. a migrations/ folder
+
+There should be a 1-1 mapping between the changes made to our database, and the migration files that exist in our
+migrations/ folder.
+
+Our migrations files set up the tables for our database.
+All changes made to our db should exist physically as part of migration files in our repository.
+Migration command line scripts
+There are generally 3 scripts needed, for
+
+migrate: creating a migration script template to fill out; generating a migration file based on changes to be made
+upgrade: applying migrations that hadn't been applied yet ("upgrading" our database)
+downgrade: rolling back applied migrations that were problematic ("downgrading" our database)
+Migration library for Flask + SQLAlchemy
+Flask-Migrate is our library for migrating changes using SQLAlchemy. It uses a library called Alembic underneath
+the hood.
+Flask-Migrate & Flask-Script
+Flask-Migrate (flask_migrate) is our migration manager for migrating SQLALchemy-based database changes
+
+Flask-Script (flask_script) lets us run migration scripts we defined, from the terminal
+
+Steps to get migrations going
+Initialize the migration repository structure for storing migrations
+Create a migration script (using Flask-Migrate)
+(Manually) Run the migration script (using Flask-Script)
+
+Takeaways
+Without migrations:
+
+We do heavy-handed work, creating and recreating the same tables in our database even for minor changes
+We can lose existing data in older tables we dropped
+With migrations:
+
+Auto-detects changes from the old version & new version of the SQLAlchemy models
+Creates a migration script that resolves differences between the old & new versions
+Gives fine-grain control to change existing tables
+This is much better, because
+
+We can keep existing schema structures, only modifying what needs to be modified
+# We can keep existing data
+# We isolate units of change in migration scripts that we can roll back to a “safe” db state
+
+# Exactly. Flask-Migrate autodetects changes in our SQLAlchemy models, but we still
+# have to manually run the migrations ourselves (using Flask-Script underneath).
+
+Correct! Flask-Migrate manages migrations. Flask-Script lets us run them. We
+need Flask-Script in order to apply the migrations that we define using Flask-Migrate
+
+Flask-Migrate
+We want to allow the user to check or uncheck todo items in our Todo app, to mark
+them as completed or not. Right now, we don't have a concept of what "completed"
+means in our database, which models a Todo with a single property called
+"description". We'd like to extend the model to also include a boolean property
+called "completed" in order to allow for todos to be marked as completed or not
+by a user on our app.
+
+While we can do this totally using psql or another Postgres client to simply alter
+our table to add a new column using the ALTER TABLE ADD COLUMN command in SQL,
+we should use migrations to handle changes to our database schema for better
+maintainability and the ability to rollback quickly in case of issues.
+
+Over the next few pages, we'll walk through how to use Flask-Migrate to add a
+new completed column to our to-do model.
+
+# STARTING AND STOPPING THE PSQL server
+To restart your postgres server
+In case of an error with existing sessions or connections, you can stop your
+postgres server to close out existing connections, and then start it up again.
+Note that stopping a server does not affect the data inside it; they still persist.
+
+To do so:
+
+On MacOS if you installed postgres using Homebrew,
+$ brew services start postgresql
+$ brew services stop postgresql
+Otherwise
+You can call start and stop manually on your postgres server using pg_ctl,
+Postgres's application for starting, stopping, and controlling a Postgres server,
+included with every Postgres install:
+
+To stop it, closing open connections, call
+
+$ pg_ctl -D /usr/local/var/postgres stop
+and to start it up again, call
+
+$ pg_ctl -D /usr/local/var/postgres start
+
+WITHIN THE DATABASE WE CAN TRY TO DO THIS:
+
+mac-di-nicola:todoapp nisp78$ psql todoapp
+psql (12.2)
+Type "help" for help.
+
+todoapp=# \d todos
+                                    Table "public.todos"
+   Column    |       Type        | Collation | Nullable |              Default
+-------------+-------------------+-----------+----------+-----------------------------------
+ id          | integer           |           | not null | nextval('todos_id_seq'::regclass)
+ description | character varying |           | not null |
+Indexes:
+    "todos_pkey" PRIMARY KEY, btree (id)
+
+todoapp=# INSERT INTO todos (description) VALUES ('this is a todo');
+INSERT 0 1
+todoapp=# INSERT INTO todos (description) VALUES ('this is a todo 2');
+INSERT 0 1
+todoapp=# INSERT INTO todos (description) VALUES ('this is a todo 3');
+INSERT 0 1
+todoapp=# INSERT INTO todos (description) VALUES ('this is a todo 4');
+INSERT 0 1
+
+todoapp=#
+Linter
+Severity  Provider  Description Line
+Git
+GitHub
+
+Too many changes
+The repository at /Users/nisp78 has too many changed files to display in Atom.
+Ensure that you have set up an appropriate .gitignore file.
+Notes/notes.py000174:1
+LFUTF-8PythonGitHubGit (0)4 updates
+
+Takeaways
+Overall Steps to Set Up & Run Migrations
+Bootstrap database migrate commands: link to the Flask app models and database,
+link to command line scripts for running migrations, set up folders to store
+migrations (as versions of the database)
+Run initial migration to create tables for SQLAlchemy models, recording the
+initial schema: ala git init && first git commit. Replaces use of db.create_all()
+Migrate on changes to our data models
+Make changes to the SQLAlchemy models
+Allow Flask-Migrate to auto-generate a migration script based on the changes
+Fine-tune the migration scripts
+Run the migration, aka “upgrade” the database schema by a “version”
+
+THE STEPS ARE:
+
+1) WE CREATE A NEW COLUMN (FOR EXAMPLE: completed = db.Column(db.Boolean, nullable=False, default=False)
+2) flask db init (to set-up folders to store migrations as versions of the database)
+3) flask db migrate (to create tables for SQLALchemy models)
+4) We make changes to the SQLAlchemy model, by, f.e., adding a column as in:
+completed = db.Column(db.Boolean, nullable=False, default=False)
+5) flask db migrate (to generate a migration script based on the changes made)
+6) We inspect the migration script in the folder versions
+7) we alter it, such as:
+def upgrade():
+        # ### commands auto generated by Alembic - please adjust! ###
+        op.add_column('todos', sa.Column('completed', sa.Boolean(), nullable=True))
+        # ### end Alembic commands ###
+
+    We also add:
+
+    op.execute('UPDATE todos SET completed = False WHERE completed IS NULL;')
+
+    op.alter_column('todos', 'completed', nullable=False)
+    # ### end Alembic commands ##
+4) flask db upgrade
+5) we can rollback this migration with flask db downgrade
+
+def upgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('todos', sa.Column('completed', sa.Boolean(), nullable=True))
+    # ### end Alembic commands ###
+
+BASICALLY BY DOING THIS WE CAN UPDATE THE DATABASE VIA THE FILE.PY IN THE versions
+FOLDER INSTEAD OF USING SQL COMMANDS FROM THE TERMINAL
+
+WE CHECK THE DATABASE WE psql todoapp and SELECT * FROM todos;
+
+UPDATING A TODOS ITEM
+
+Takeaways
+An update involves setting the attributes of an existing object in the database.
+
+In SQL:
+
+UPDATE table_name
+SET column1 = value1, column2 = value2, ...
+WHERE condition;
+In SQLAlchemy ORM:
+
+user = User.query.get(some_id)
+user.name = 'Some new name'
+db.session.commit()
+
+
+DELETING A TODO ITEM
+
+Takeaways
+Deletes deal with removing existing objects in our database
+
+In SQL:
+
+DELETE FROM table_name
+WHERE condition;
+In SQLAlchemy ORM:
+
+todo = Todo.query.get(todo_id)
+db.session.delete(todo) # or...
+Todo.query.filter_by(id=todo_id).delete()
+db.session.commit()
+Steps we'll implement:
+Loop through every To-Do item and show a delete button
+Pressing the delete button sends a request that includes which to-do item to
+delete
+The controller takes the user input, and notifies the models to delete the To-Do
+object by ID
+On successful deletion by the models, the controller should notify the view to
+refresh the page and redirect to our homepage, showing a fresh fetch of all
+To-Do items to now exclude the removed item.
+Using the DELETE method
+Requests that delete objects should use the method DELETE, as opposed to POST,
+GET, etc. when sending requests to the server.
+
+Introduction: Modeling Relationships
+So far, we've completed doing CRUD for a single model: a To Do item. The CRUD
+implementation patterns we've learned can apply to multiple models for any given
+web application, so long as those models do not have relationships between them.
+However, we'll often be implementing web apps with multiple models that have
+relationships with one another.
+
+The relationships between these models can determine if certain actions on
+one model should happen on other models, so that when something happens to one
+model, related model objects should also be affected (by being created, read, updated, or deleted).
+
+Examples are:
+
+Removing a User's account should remove all of that user's photos, documents, etc.
+Deleting a Discussion Thread should delete all of its comments.
+Deactivating the profile of an Airbnb host should deactivate all of that host's listings.
+Accessing a Blog Post should also access all of its comments.
+Accessing an Airbnb host's profile should also access all of their listings.
+In order to handle CRUD across related models that can often have relationships
+with one another, we'll need to learn about how we model relationships, both
+reviewing relationship modeling in SQL and learning particularly about how we
+implement them in SQLAlchemy ORM.
+
+Let's put aside our To-Do app development for now to learn about mapping
+relationships between models. Once we've done that, we'll come back to our
+To-Do app to implement them.
+
+Correct! The JOIN statement specifies which columns to match on between both tables,
+and those columns are not always primary or foreign keys
+
+Takeaways
+SQLAlchemy configures the settings between model relationships once, and
+generates JOIN statements for us whenever we need them.
+db.relationship is an interface offered in SQLAlchemy to provide and configure
+a mapped relationship between two models.
+db.relationship is defined on the parent model, and it sets:
+the name of its children (e.g. children), for example parent1.children
+the name of a parent on a child using the backref, for example child1.my_amazing_parent.
+
+Takeaways
+When calling child1.some_parent, SQLAlchemy determines when we load the parent
+from the database.
+Why is it important to care about when we load parents?
+Joins are expensive.
+We should avoid having the user idling. Delays more than 150ms are noticeable,
+so milliseconds of performance matter!
+We should make sure the joins happen during a time and place in the UX that
+doesn't negatively impact the experience too much.
+Lazy loading vs. Eager loading.
+
+Takeaways
+Lazy loading
+Load needed joined data only as needed. Default in SQLAlchemy.
+
+Pro: no initial wait time. Load only what you need.
+Con: produces a join SQL call every time there is a request for a joined asset. Bad if you do this a lot.
+Eager loading
+Load all needed joined data objects, all at once.
+
+Pro: reduces further queries to the database. Subsequent SQL calls read existing data
+Con: loading the joined table has a long upfront initial load time.
+lazy=True (lazy loading) is the default option in db.relationship:
+
+children = db.relationship('ChildModel', backref='some_parent', lazy=True)
+
+Takeaways
+db.relationship
+Allows SQLAlchemy to identity relationships between models
+Links relationships with backrefs (child1.some_parent)
+Configures relationship dynamics between parents and children, including options like lazy, collection_class, and cascade
+
+Takeaways
+db.relationship does not set up foreign key constraints for you. We need to add
+a column, some_parent_id, on the child model that has a foreign key constraint
+Whereas we set db.relationship on the parent model, we set the foreign key
+constraint on the child model.
+A foreign key constraint prefers referential integrity from one table to another,
+by ensuring that the foreign key column always maps a primary key in the foreign table.
+
+db.ForeignKey
+Option in db.column to specify a foreign key constraint, referring to the primary
+key of the other table / model
+Gets defined on the Child model
+
+One-to-Many Relationship Setup
+Set up a one-to-many relationship between todos and todo lists using SQLAlchemy ORM
+Now that we've reviewed how to use db.relationship and db.ForeignKey to set up relationships between models, let's focus back on our To-Do App and use these concepts to model To-Do Lists in our app and set up the relationship between our To-Do model and our new To-Do List model.
+
+To-Do Lists have many To-Dos, and every To-Do belongs to exactly one To-Do List, which indicates the existence of a one to many relationship between To-Dos and To-Do Lists.
+
+(For reference: read "The 3 Types of Relationships in Database Design" by Database.Guide -- click here)
+
+Follow along! Interactive workspace
+You can use the interactive workspace below to follow along the walk-through videos below. We'll be building out the To-Do List model.
+
+Overall steps taken
+Modified our Todo model to (temporarily) allow null values in list_id:
+list_id = db.Column(db.Integer, db.ForeignKey('todolists.id'), nullable=True)
+Ran the migration, allowing list_id to be null
+Then using psql (or any other Postgres client),
+
+Populated our database with a default list ("Uncategorized") to add all currently existing Todo items to
+Associated existing to-do items with the "Uncategorized" list with ID 1, setting todo.list_id = 1. We could have also done this in a migration rather than using psql; either works.
+Set nullable=False on the list_id column
+Ran flask db migrate to generate a migration file for updating the nullability constraint
+Ran flask db upgrade to apply the migration
+Example Terminal Output
+macbook:~ amy$ psql todoapp
+psql (11.3, server 10.10)
+Type "help" for help.
+todoapp=# \dt
+            List of relations
+ Schema |      Name       | Type  | Owner
+--------+-----------------+-------+-------
+ public | alembic_version | table | amy
+ public | todolists       | table | amy
+ public | todos           | table | amy
+(3 rows)
+
+todoapp=# insert into todolists (name) values ('Uncategorized');
+INSERT 0 1
+todoapp=# update todos set list_id = 1 where list_id is null;
+UPDATE 6
+todoapp=# select * from todos;
+ id | description  | completed | list_id
+----+--------------+-----------+---------
+  5 | Do homework  | f         |       1
+  7 | Do thing 3   | f         |       1
+ 21 | thing 17     | t         |       1
+  6 | Do a thing   | t         |       1
+  8 | Do a thing 4 | t         |       1
+  9 | Thing 5      | f         |       1
+(6 rows)
+
+todoapp=# \q
+Aside
+SQL commands can be written in any case (update, UPDATE, uPDaTe) and they will still execute.
+
+Important
+We always want to use migrations in order to update the data schema.
+We can establish maintenance windows during times when the app isn't well used and manipulate production data then, in order to prepare the data before a schema migration, and change it after a schema migration.
