@@ -216,7 +216,6 @@ import sys
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://nisp78@localhost:5432/todoapp'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
@@ -224,25 +223,30 @@ class Todo(db.Model):
   __tablename__ = 'todos'
   id = db.Column(db.Integer, primary_key=True)
   description = db.Column(db.String(), nullable=False)
-  completed = db.Column(db.Boolean, nullable=False)
+  completed = db.Column(db.Boolean, default=False)
+  list_id = db.Column(db.Integer, db.ForeignKey('todolists.id'), nullable=False)
 
   def __repr__(self):
     return f'<Todo {self.id} {self.description}>'
 
-# note: more conventionally, we would write a
-# POST endpoint to /todos for the create endpoint:
-# @app.route('/todos', method=['POST'])
+class TodoList(db.Model):
+  __tablename__ = 'todolists'
+  id = db.Column(db.Integer, primary_key=True)
+  name = db.Column(db.String(), nullable=False)
+  todos = db.relationship('Todo', backref='list', lazy=True)
+
 @app.route('/todos/create', methods=['POST'])
 def create_todo():
   error = False
   body = {}
   try:
     description = request.get_json()['description']
-    todo = Todo(description=description, completed=False)
+    list_id = request.get_json()['list_id']
+    todo = Todo(description=description)
+    active_list = TodoList.query.get(list_id)
+    todo.list = active_list
     db.session.add(todo)
     db.session.commit()
-    body['id'] = todo.id
-    body['completed'] = todo.completed
     body['description'] = todo.description
   except:
     error = True
@@ -250,10 +254,21 @@ def create_todo():
     print(sys.exc_info())
   finally:
     db.session.close()
-  if error:
-    abort (400)
-  else:
+  if not error:
     return jsonify(body)
+  else:
+    abort(500)
+
+@app.route('/todos/<todo_id>', methods=['DELETE'])
+def delete_todo(todo_id):
+  try:
+    Todo.query.filter_by(id=todo_id).delete()
+    db.session.commit()
+  except:
+    db.session.rollback()
+  finally:
+    db.session.close()
+  return jsonify({ 'success': True })
 
 @app.route('/todos/<todo_id>/set-completed', methods=['POST'])
 def set_completed_todo(todo_id):
@@ -269,18 +284,42 @@ def set_completed_todo(todo_id):
     db.session.close()
   return redirect(url_for('index'))
 
-@app.route('/todos/<todo_id>', methods=['DELETE'])
-def delete_todo(todo_id):
-  try:
-    Todo.query.filter_by(id=todo_id).delete()
-    db.session.commit()
-  except:
-    db.session.rollback()
-  finally:
-    db.session.close()
-  return jsonify({ 'success': True })
-
+@app.route('/lists/<list_id>')
+def get_list_todos(list_id):
+  return render_template('index.html',
+  lists=TodoList.query.all(),
+  active_list=TodoList.query.get(list_id),
+  todos=Todo.query.filter_by(list_id=list_id).order_by('id').all()
+)
 
 @app.route('/')
 def index():
-  return render_template('index.html', todos=Todo.query.order_by('id').all())
+  return redirect(url_for('get_list_todos', list_id=1))
+
+
+
+# After having link parent and child classes we run:
+# flask db migrate
+# In the file 73aac7ddaa59 in the migrations/versions folder, let us make the
+# following change:op.add_column('todos', sa.Column('list_id', sa.Integer(), nullable=True))
+# In class Todo we edit like this: list_id = db.Column(db.Integer, db.ForeignKey('todolists.id'), nullable=True
+# flask db upgrade
+# psql todoapp OPPURE SI PUO' FARE UNA MIGRAZIONE
+# insert into todolists (name) values ('Uncategorized');
+# UPDATE todos SET list_id = 1 WHERE list_id IS NULL;
+# list_id = db.Column(db.Integer, db.ForeignKey('todolists.id'), nullable=False)
+# flask db migrate
+# flask db upgrade
+# We change @app.route('/lists/<list_id>')
+# We define the homepage route @app.route('/') and @app.route('/lists/<list_id>')
+# in Python3: from app import db, TodoList, Todo
+# list = TodoList(name='Urgent')
+# >>> list = TodoList(name='Urgent')
+# >>> todo = Todo(description='This really important thing')
+# >>> todo2 = Todo(description='Urgent todo 2')
+# >>> todo3 = Todo(description='Urgent todo 3')
+# # >>> todo.list = list
+# >>> todo2.list = list
+# >>> todo3.list = list
+# >>> db.session.add(list)
+# >>> db.session.commit()
